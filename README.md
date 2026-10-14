@@ -17,3 +17,15 @@ The architecture simulates a secure corporate network perimeter utilizing a mult
 | **LAN Internal**  | VMnet1 (Host-Only) | `192.168.100.0/24` | pfSense Firewall Appliance (Pending) |
 
 ---
+
+## 2. Perimeter Edge Deployment: pfSense Firewall
+The perimeter security gateway has been successfully provisioned as a virtual appliance running on a **FreeBSD 14 x64** kernel kernel architecture. 
+
+### Core Interface Assignments & DHCP Scope Configuration
+The network interface drivers have been statically mapped to align with hypervisor switches, and the internal local area network gateway variables have been initialized via the console interface:
+
+* **WAN Routing:** Initialized via driver `em0`, pulling a dynamic IP configuration from the hypervisor NAT gateway (`VMnet8`) to facilitate outbound internet transit.
+* **LAN Configuration:** Statically assigned to IP address **`192.168.100.1`** with a subnet mask allocation of **`/24`** (Class C network topology).
+* **DHCP Scope Engine:** Enabled on the internal LAN interface. The active IP allocation lease pool is strictly bound to the range of **`192.168.100.10` through `192.168.100.50`**, reserving lower and upper host registers for future static infrastructure nodes.
+
+---
