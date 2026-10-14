@@ -29,3 +29,24 @@ The network interface drivers have been statically mapped to align with hypervis
 * **DHCP Scope Engine:** Enabled on the internal LAN interface. The active IP allocation lease pool is strictly bound to the range of **`192.168.100.10` through `192.168.100.50`**, reserving lower and upper host registers for future static infrastructure nodes.
 
 ---
+---
+
+## 3. Compute Infrastructure Node: Ubuntu Server
+The primary internal workload node has been successfully provisioned running a headless **Ubuntu Server 24.04 LTS** platform architecture.
+
+### Host Profile & Administrative Credentials
+* **Hostname:** `ubuntu-srv`
+* **Primary Administrative User:** `sysadmin`
+* **Access Method:** OpenSSH Server enabled via port `22` (Password Authentication active).
+
+### Interface Mapping & Network Verification
+The host relies on a single virtual network adapter mapped strictly to the isolated corporate LAN switch.
+
+* **Primary Interface:** `ens33`
+* **Network Assignment Engine:** DHCP via pfSense Firewall Appliance.
+* **Assigned IPv4 Address:** **`192.168.100.10`** with a subnet mask allocation of **`/24`**.
+* **Default Network Gateway:** `192.168.100.1` (pfSense LAN Interface).
+
+### Baseline Network Verification Logs
+* **Internal Connectivity Test:** `ping -c 4 192.168.100.1` execution successful. **0% packet loss** verified. 
+* **Layer 2 Hypervisor Switching:** Confirmed operational on switch `VMnet1`.
