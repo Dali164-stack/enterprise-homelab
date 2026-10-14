@@ -50,3 +50,11 @@ The host relies on a single virtual network adapter mapped strictly to the isola
 ### Baseline Network Verification Logs
 * **Internal Connectivity Test:** `ping -c 4 192.168.100.1` execution successful. **0% packet loss** verified. 
 * **Layer 2 Hypervisor Switching:** Confirmed operational on switch `VMnet1`.
+### Edge Routing & DNS Troubleshooting Logs
+* **Diagnostic Incident:** Initial deployment showed successful external IP routing (`ping 8.8.8.8`), but full domain name resolution failed (`temporary failure in name resolution`).
+* **Root Cause Analysis:** The edge gateway (pfSense) lacked explicit upstream DNS server configurations in its core kernel routing engine, resulting in blocked or dropped DNS queries (Port 53 UDP/TCP) originating from the `VMnet1` segment.
+* **Remediation Implemented:** 
+  1. Configured the Windows Host `VMnet1` adapter to static IP `192.168.100.99/24` to establish a management bridge.
+  2. Bypassed self-signed certificate warnings to access the pfSense web configuration interface at `https://192.168.100.1`.
+  3. Committed Google (`8.8.8.8`) and Cloudflare (`1.1.1.1`) to **System > General Setup > DNS Server Settings** with DNS Override features active.
+* **Post-Remediation Verification:** Complete end-to-end outbound DNS resolution successfully restored. Command `ping -c 4 google.com` executed on `ubuntu-srv` yields **0% packet loss**.
