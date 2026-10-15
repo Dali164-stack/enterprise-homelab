@@ -79,3 +79,16 @@ To provide administrative flexibility without relying on the hypervisor framewor
 * **Active Networking Port:** `3389/tcp` (Hardened via local UFW profile rules)
 * **Production Status:** Confirmed operational. Graphical desktop management sessions launch seamlessly via native Windows Remote Desktop Connection (`mstsc`) over static channel `192.168.100.10`.
 * **Session Integrity Rules:** Validated that local VMware console sessions must remain logged out to prevent multi-session display rendering crashes.
+## 4. Perimeter Edge Security Policies (pfSense Core Rules)
+The edge firewall appliance utilizes strict stateful packet inspection. The following access control entries (ACE) have been deployed on the private LAN segment (`VMnet1`):
+
+### Active Rules Matrix (LAN Interface)
+
+| Order | Action | Source | Port | Destination | Protocol | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | **BLOCK** | `192.168.100.10` | * | Any | ICMP (Echo Req) | Block Ubuntu Outbound Ping Diagnostics |
+| 2 | **ALLOW** | LAN net | * | Any | Any | Default allow LAN to any rule |
+
+### Live Operational Verification Logs
+* **ICMP Egress Control Test:** Command `ping -c 4 8.8.8.8` executed on `ubuntu-srv` results in **100% packet loss** (4 packets transmitted, 0 received). Confirmed firewall drop behavior.
+* **HTTP/HTTPS Egress Transit Test:** Command `curl -I https://google.com` returns a clean `HTTP 200 OK` response. Confirmed application-layer data flow remains fully intact.
