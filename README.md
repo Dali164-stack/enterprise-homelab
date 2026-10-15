@@ -72,3 +72,10 @@ To transition the compute workload from a troubleshooting state to a hardened pr
   ```
 * **Credential Complexity Compliance:** Account `sysadmin` credentials have been migrated to a fully compliant corporate complexity string, satisfying internal dictionary check mechanisms (`pam_pwquality`).
 * **Management Persistence Status:** End-to-end verification confirms remote management access over Port 22 is stable, resilient across host restarts, and functioning at static anchor address `192.168.100.10`.
+### 3.2 Graphical Remote Management (XRDP Gateway)
+To provide administrative flexibility without relying on the hypervisor framework, a secure remote graphical pipeline has been established:
+
+* **Remote Display Engine:** XRDP Server (Xorg back-end architecture)
+* **Active Networking Port:** `3389/tcp` (Hardened via local UFW profile rules)
+* **Production Status:** Confirmed operational. Graphical desktop management sessions launch seamlessly via native Windows Remote Desktop Connection (`mstsc`) over static channel `192.168.100.10`.
+* **Session Integrity Rules:** Validated that local VMware console sessions must remain logged out to prevent multi-session display rendering crashes.
