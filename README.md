@@ -58,3 +58,17 @@ The host relies on a single virtual network adapter mapped strictly to the isola
   2. Bypassed self-signed certificate warnings to access the pfSense web configuration interface at `https://192.168.100.1`.
   3. Committed Google (`8.8.8.8`) and Cloudflare (`1.1.1.1`) to **System > General Setup > DNS Server Settings** with DNS Override features active.
 * **Post-Remediation Verification:** Complete end-to-end outbound DNS resolution successfully restored. Command `ping -c 4 google.com` executed on `ubuntu-srv` yields **0% packet loss**.
+### 3.1 Host Security Hardening & Production Rules Matrix
+To transition the compute workload from a troubleshooting state to a hardened production deployment, the local kernel-level defense parameters have been completely re-initialized:
+
+* **Host-Based Firewall (UFW Status):** `Active`
+* **Default Security Policy:** Deny (Incoming), Allow (Outgoing), Disabled (Routed)
+* **Active Firewall Access Control Rules:**
+  ```text
+  To                         Action      From
+  --                         ------      ----
+  22/tcp                     ALLOW IN    Anywhere
+  22/tcp (v6)                ALLOW IN    Anywhere (IPv6)
+  ```
+* **Credential Complexity Compliance:** Account `sysadmin` credentials have been migrated to a fully compliant corporate complexity string, satisfying internal dictionary check mechanisms (`pam_pwquality`).
+* **Management Persistence Status:** End-to-end verification confirms remote management access over Port 22 is stable, resilient across host restarts, and functioning at static anchor address `192.168.100.10`.
