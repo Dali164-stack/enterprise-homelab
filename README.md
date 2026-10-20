@@ -87,8 +87,30 @@ The edge firewall appliance utilizes strict stateful packet inspection. The foll
 | Order | Action | Source | Port | Destination | Protocol | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | 1 | **BLOCK** | `192.168.100.10` | * | Any | ICMP (Echo Req) | Block Ubuntu Outbound Ping Diagnostics |
-| 2 | **ALLOW** | LAN net | * | Any | Any | Default allow LAN to any rule |
+| 2 | **BLOCK** | Any | * | LAN Address | TCP (80) | Block unencrypted HTTP management Access |
+| 3 | **ALLOW** | LAN net | * | Any | Any | Default allow LAN to any rule |
 
 ### Live Operational Verification Logs
 * **ICMP Egress Control Test:** Command `ping -c 4 8.8.8.8` executed on `ubuntu-srv` results in **100% packet loss** (4 packets transmitted, 0 received). Confirmed firewall drop behavior.
 * **HTTP/HTTPS Egress Transit Test:** Command `curl -I https://google.com` returns a clean `HTTP 200 OK` response. Confirmed application-layer data flow remains fully intact.
+
+### 4.1 Strict Management Plane Hardening (Port 80 De-provisioning)
+To align the perimeter edge framework with zero-trust corporate security standards, unencrypted web management vectors have been strictly deprecated.
+
+#### Step 1: WebConfigurator Anti-Lockout / Redirect Override
+* **Configuration Path:** `System > Advanced > Admin Access`
+* **Variable Change:** Enabled **"Disable webConfigurator redirect rule"**.
+* **Engineering Impact:** Removed the hidden default firewall rule allowing pfSense to listen on port 80 for automatic upgrades. This forces encryption at the network boundary.
+
+#### Step 2: Custom Access Control Entry Deployment
+* **Action:** `Block`
+* **Source:** `Any` (Global subnet coverage)
+* **Destination:** `LAN Address` (pfSense Gateway)
+* **Destination Port:** `80 (HTTP)`
+* **Status:** Operational. Applied as Rule Order #2 on the LAN interface.
+
+#### Post-Remediation Verification Logs
+To ensure browser HSTS and local caches did not obscure testing results, raw socket execution was validated via command line:
+* **Host-Side Browser Verification (Incognito Mode):** Navigating to `http://192.168.100.1` results in an immediate connection timeout/unreachable page.
+* **Compute Node Terminal Verification:** Executing `curl -Iv http://192.168.100.1` on `ubuntu-srv` fails to establish a 3-way handshake on port 80, terminating in a hard connection failure.
+* **Encrypted Access Validation:** Forcing a connection via `https://192.168.100.1` successfully builds a secure TLS session and exposes the webConfigurator dashboard.
