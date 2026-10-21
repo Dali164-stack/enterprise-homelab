@@ -79,6 +79,33 @@ To provide administrative flexibility without relying on the hypervisor framewor
 * **Active Networking Port:** `3389/tcp` (Hardened via local UFW profile rules)
 * **Production Status:** Confirmed operational. Graphical desktop management sessions launch seamlessly via native Windows Remote Desktop Connection (`mstsc`) over static channel `192.168.100.10`.
 * **Session Integrity Rules:** Validated that local VMware console sessions must remain logged out to prevent multi-session display rendering crashes.
+
+### 3.3 Permanent Local Routing Engine Stabilization
+Following infrastructure power cycles, the compute node experienced localized routing table truncation, dropping the gateway configuration and triggering hard `Network is unreachable` kernel states.
+
+#### Root Cause Analysis
+NetworkManager configuration profiles handling dynamic DHCP allocations failed to persistently bind the upstream perimeter gateway anchor metric upon initialization loops.
+
+#### Remediation Implemented
+1. **Volatile Kernel Patch:** Executed `sudo ip route add default via 192.168.100.1 dev ens33` to instantly restore active application-layer transit routes.
+2. **Persistent Netplan Hardening:** Modified the core system network configurations under `/etc/netplan/` to explicitly enforce fallback gateway bindings beneath the active rendering daemon.
+
+```yaml
+network:
+  version: 2
+  renderer: NetworkManager
+  ethernets:
+    ens33:
+      dhcp4: true
+      routes:
+        - to: default
+          via: 192.168.100.1
+```
+
+#### Post-Remediation Verification Logs
+* **Reboot Persistence Test:** Triggered `sudo reboot`. Verified that the `default via 192.168.100.1 proto dhcp` channel instantiates automatically on cold initialization.
+* **Stateful Firewall Integrity Check:** Executing `curl -I https://google.com` yields immediate `HTTP/2 200` payloads, validating that local outbound routing remains online and synchronized with perimeter rulesets.
+
 ## 4. Perimeter Edge Security Policies (pfSense Core Rules)
 The edge firewall appliance utilizes strict stateful packet inspection. The following access control entries (ACE) have been deployed on the private LAN segment (`VMnet1`):
 
