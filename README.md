@@ -106,6 +106,30 @@ network:
 * **Reboot Persistence Test:** Triggered `sudo reboot`. Verified that the `default via 192.168.100.1 proto dhcp` channel instantiates automatically on cold initialization.
 * **Stateful Firewall Integrity Check:** Executing `curl -I https://google.com` yields immediate `HTTP/2 200` payloads, validating that local outbound routing remains online and synchronized with perimeter rulesets.
 
+### 3.4 Production Docker Container Engine Deployment
+The compute infrastructure node has been successfully provisioned with the official Docker containerization subsystem to facilitate secure multi-tenant microservice orchestration.
+
+#### Volatile Initialization Challenges & Resolution
+* **Dynamic DHCP Drift:** Upon host infrastructure cold-boot, the compute node's IPv4 network boundary migrated dynamically from `192.168.100.10` to `192.168.100.11` due to standard DHCP lease pool cycling. Remote management targets were updated accordingly.
+* **Cryptographic GPG Security Block:** Initial installation runs failed with `NO_PUBKEY 7EA0A9C3F273FCD8` signature verification anomalies. This occurred because standard plain-text armor structures (`.asc`) failed to map correctly with the strict validation engines native to Ubuntu 24.04 (Noble Numbat).
+
+#### Remediation and Hardening Suite
+The installation topology was systematically rewritten to align with strict enterprise application standards:
+1. **Keyring Isolation:** Formatted a secure local storage tier at `/etc/apt/keyrings/`.
+2. **Binary De-armoring:** Streamed the official cryptographic public key directly from the verified Docker source subdomain and translated the payload into a native binary format via `gpg --dearmor`:
+   ```bash
+   curl -fsSL https://download.docker.com | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+   ```
+3. **Targeted Access Validation:** Managed the software source pointers by locking down the exact tracking file (`/etc/apt/sources.list.d/docker.list`) to scan against the hard-linked binary key:
+   ```text
+   deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu noble stable
+   ```
+
+#### Post-Deployment Verification Logs
+* **Daemon Integrity Matrix:** Verification utility `sudo systemctl status docker` confirms background system status is active, green, and initialized.
+* **Egress Plumbing Check:** Execution of `sudo docker run hello-world` successfully forces the container runtime layer to connect outbound through the pfSense perimeter gateway (`192.168.100.1`), pull down remote data blocks from Docker Hub, and parse an execution greeting locally.
+
+
 ## 4. Perimeter Edge Security Policies (pfSense Core Rules)
 The edge firewall appliance utilizes strict stateful packet inspection. The following access control entries (ACE) have been deployed on the private LAN segment (`VMnet1`):
 
