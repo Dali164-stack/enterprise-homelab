@@ -129,6 +129,38 @@ The installation topology was systematically rewritten to align with strict ente
 * **Daemon Integrity Matrix:** Verification utility `sudo systemctl status docker` confirms background system status is active, green, and initialized.
 * **Egress Plumbing Check:** Execution of `sudo docker run hello-world` successfully forces the container runtime layer to connect outbound through the pfSense perimeter gateway (`192.168.100.1`), pull down remote data blocks from Docker Hub, and parse an execution greeting locally.
 
+### 3.5 Virtualized Application Layer Deployment (Nginx Workload)
+To validate the end-to-end data plane integrity of the host-to-firewall network fabric, a standalone microservice workload has been provisioned.
+
+#### Application Architecture & Port Mapping
+* **Deployment Command:** `sudo docker run -d --name homelab-web -p 8080:80 nginx`
+* **Port Translation Vector:** Forwards external requests hitting the Ubuntu host on port `8080` down into the containerized sandbox's native HTTP port `80`. This architecture bypasses local host conflicts while complying with perimeter web blocks on port 80.
+
+#### Post-Remediation Verification Logs
+* **Local Loopback Validation:** Running `curl -I http://localhost:8080` inside `ubuntu-srv` natively yields an immediate `HTTP/1.1 200 OK` header payload from the Nginx daemon.
+* **Host-to-Guest Inter-Network Verification:** Navigating to `http://192.168.100.11:8080` from a dedicated host browser window successfully processes the graphical web application layer.
+* **Browser HSTS Mitigation:** Local browser history aggressively forced unencrypted HTTP traffic to rewrite as HTTPS, throwing connection drops. Forcing connection tracking via an **Incognito Session** successfully isolated the transport layers and exposed the true application payload.
+
+### 3.6 Enterprise Reverse Proxy Deployment (Nginx Proxy Manager)
+To eliminate messy IP-and-port combinations (such as `192.168.100.11:8080`) and simulate real corporate application gateways, a containerized reverse proxy architecture has been deployed[cite: 1].
+
+#### Application Architecture & Port Allocations
+* **Container Orchestration:** Nginx Proxy Manager (NPM) deployed via Docker Compose on the Ubuntu Server (`192.168.100.11`)[cite: 1, 2].
+* **Active Listening Ports:** 
+  * `80/tcp` (Public HTTP Traffic)[cite: 2]
+  * `443/tcp` (Public HTTPS Traffic)[cite: 2]
+  * `81/tcp` (Administrative Control Panel UI)[cite: 2]
+
+### 4.2 Internal Local DNS Resolver Integration (pfSense Host Overrides)
+To translate human-readable enterprise domains to internal microservices without relying on public DNS infrastructure, the local network name resolution path was hardened:
+
+#### Configuration Workflow
+1. **pfSense DNS Resolver (Unbound):** Configured explicit **Host Overrides** mapping internal domain zones (`*.homelab.local`) directly to the Ubuntu server compute node (`192.168.100.11`)[cite: 1].
+2. **Host-Only Bridge Routing:** Updated the Windows host `VMnet1` adapter configuration to enforce `192.168.100.1` as its primary Preferred DNS Server, establishing a stable local resolution loopback.
+
+#### Post-Remediation Verification Logs
+* **DNS Resolution Check:** Executing `nslookup nginx.homelab.local` successfully queries the pfSense nameserver (`pfsense.home.arpa` at `192.168.100.1`) and returns target address `192.168.100.11`[cite: 5].
+* **Application Layer Routing:** Navigating to `http://nginx.homelab.local` seamlessly proxies traffic through Nginx Proxy Manager down to the underlying backend test container, achieving clean domain translation.
 
 ## 4. Perimeter Edge Security Policies (pfSense Core Rules)
 The edge firewall appliance utilizes strict stateful packet inspection. The following access control entries (ACE) have been deployed on the private LAN segment (`VMnet1`):
@@ -165,3 +197,4 @@ To ensure browser HSTS and local caches did not obscure testing results, raw soc
 * **Host-Side Browser Verification (Incognito Mode):** Navigating to `http://192.168.100.1` results in an immediate connection timeout/unreachable page.
 * **Compute Node Terminal Verification:** Executing `curl -Iv http://192.168.100.1` on `ubuntu-srv` fails to establish a 3-way handshake on port 80, terminating in a hard connection failure.
 * **Encrypted Access Validation:** Forcing a connection via `https://192.168.100.1` successfully builds a secure TLS session and exposes the webConfigurator dashboard.
+
