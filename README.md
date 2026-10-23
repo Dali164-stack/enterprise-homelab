@@ -198,3 +198,13 @@ To ensure browser HSTS and local caches did not obscure testing results, raw soc
 * **Compute Node Terminal Verification:** Executing `curl -Iv http://192.168.100.1` on `ubuntu-srv` fails to establish a 3-way handshake on port 80, terminating in a hard connection failure.
 * **Encrypted Access Validation:** Forcing a connection via `https://192.168.100.1` successfully builds a secure TLS session and exposes the webConfigurator dashboard.
 
+## 5. Current Implementation Status: Secure Edge Proxy & PKI
+
+### Architecture & Components
+* **Edge Reverse Proxy:** Deployed **Nginx Proxy Manager (NPM)** via Docker on Ubuntu Server (`192.168.100.11`) to manage ingress traffic, routing, and SSL termination.
+* **Internal PKI & TLS:** Implemented custom local wildcard certificates (`*.homelab.local`) generated via `mkcert` and trusted at the OS level to simulate enterprise internal certificate authorities.
+* **Upstream Testing:** Configured dynamic proxy hosts routing to containerized workloads with TLS enforcement (`Force SSL`, `HTTP/2`) and valid trust chains.
+
+### Engineering & Troubleshooting Highlights
+* **Cross-Platform Cryptographic Parsing:** Resolved strict OpenSSL backend decoder errors (`ossl_store_handle_load_result`) by ensuring precise UTF-8 PEM file structuring and handling cross-platform file transfer routines between Windows administrative hosts and Linux Docker volumes.
+* **Edge Security:** Established secure HTTPS connections for local service discovery, avoiding insecure plaintext traffic within internal networks.
