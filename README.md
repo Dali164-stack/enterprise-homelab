@@ -208,3 +208,104 @@ To ensure browser HSTS and local caches did not obscure testing results, raw soc
 ### Engineering & Troubleshooting Highlights
 * **Cross-Platform Cryptographic Parsing:** Resolved strict OpenSSL backend decoder errors (`ossl_store_handle_load_result`) by ensuring precise UTF-8 PEM file structuring and handling cross-platform file transfer routines between Windows administrative hosts and Linux Docker volumes.
 * **Edge Security:** Established secure HTTPS connections for local service discovery, avoiding insecure plaintext traffic within internal networks.
+
+## 🔐 Identity & Access Management (IAM) — Keycloak Setup
+
+### 📌 Overview
+This section documents the deployment and configuration of an enterprise-grade Identity and Access Management (IAM) infrastructure using **Keycloak 26** backed by **PostgreSQL 16**, hosted on an **Ubuntu Server** container environment behind **Nginx Proxy Manager (NPM)** with wildcard TLS/PKI certificates (`*.homelab.local`).
+
+The goal of this deployment is to establish a centralized Single Sign-On (SSO) authority enforcing **Role-Based Access Control (RBAC)** across all downstream self-hosted services and infrastructure management applications.
+
+---
+
+### 🏗 Network & Proxy Architecture
+
+* **Host Node:** Ubuntu Server (`192.168.100.11`) running Docker Engine.
+* **External Network:** Dedicated bridge network (`homelab-net`) ensuring container isolation and inter-service routing.
+* **Reverse Proxy:** Nginx Proxy Manager terminating SSL (`https://auth.homelab.local`).
+* **Header Forwarding:** Keycloak configured with `KC_PROXY_HEADERS: "xforwarded"` to properly evaluate reverse proxy HTTP headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`) supplied by NPM, eliminating proxy loopback errors.
+
+---
+
+### 🔐 Identity & RBAC Design
+
+To adhere to the Principle of Least Privilege and maintain proper separation of concerns:
+1. **Master Realm:** Reserved strictly for root-level identity provider administration.
+2. **Homelab Realm:** Isolated production realm created for homelab users, groups, and downstream client application SSO integrations.
+
+#### Role-Based Access Control (RBAC) Matrix
+
+| Group Name | Realm Role | Description / Access Scope |
+| :--- | :--- | :--- |
+| **Administrators** | `homelab-admin` | Full administrative access across integrated homelab services. |
+| **Standard Users** | `homelab-user` | Regular authenticated user privileges and standard service access. |
+| **Auditors** | `homelab-readonly` | Read-only / view-only access across monitoring and auditing dashboards. |
+Here is the clean, full markdown section ready to be appended directly to your `README.md`:
+
+```markdown
+## 🔐 Identity & Access Management (IAM) — Keycloak Setup
+
+### 📌 Overview
+This section documents the deployment and configuration of an enterprise-grade Identity and Access Management (IAM) infrastructure using **Keycloak 26** backed by **PostgreSQL 16**, hosted on an **Ubuntu Server** container environment behind **Nginx Proxy Manager (NPM)** with wildcard TLS/PKI certificates (`*.homelab.local`).
+
+The goal of this deployment is to establish a centralized Single Sign-On (SSO) authority enforcing **Role-Based Access Control (RBAC)** across all downstream self-hosted services and infrastructure management applications.
+
+---
+
+### 🏗 Network & Proxy Architecture
+
+* **Host Node:** Ubuntu Server (`192.168.100.11`) running Docker Engine.
+* **External Network:** Dedicated bridge network (`homelab-net`) ensuring container isolation and inter-service routing.
+* **Reverse Proxy:** Nginx Proxy Manager terminating SSL (`https://auth.homelab.local`).
+* **Header Forwarding:** Keycloak configured with `KC_PROXY_HEADERS: "xforwarded"` to properly evaluate reverse proxy HTTP headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`) supplied by NPM, eliminating proxy loopback errors.
+
+---
+
+### 🔐 Identity & RBAC Design
+
+To adhere to the Principle of Least Privilege and maintain proper separation of concerns:
+1. **Master Realm:** Reserved strictly for root-level identity provider administration.
+2. **Homelab Realm:** Isolated production realm created for homelab users, groups, and downstream client application SSO integrations.
+
+#### Role-Based Access Control (RBAC) Matrix
+
+| Group Name | Realm Role | Description / Access Scope |
+| :--- | :--- | :--- |
+| **Administrators** | `homelab-admin` | Full administrative access across integrated homelab services. |
+| **Standard Users** | `homelab-user` | Regular authenticated user privileges and standard service access. |
+| **Auditors** | `homelab-readonly` | Read-only / view-only access across monitoring and auditing dashboards. |
+
+
+```
+
+[ User Account ] ──> ( Group Membership ) ──> [ Realm Role ] ──> [ OIDC JWT Claim ] ──> ( App Enforces Local RBAC )
+
+```
+
+---
+
+### 🛠 Deployment & Configuration Steps
+
+#### 1. Keycloak Core Privileges & Realm Provisioning
+* Initialized system administrator (`sysadmin`) in the `master` realm.
+* Assigned global administrative scope (`admin` and `create-realm` realm roles) to allow self-managed realm creation and tenant configuration.
+* Provisioned the custom production realm: **`Homelab`**.
+
+#### 2. RBAC Construction
+* Created custom application-level realm roles:
+  * `homelab-admin`
+  * `homelab-user`
+  * `homelab-readonly`
+* Configured target user groups (`Administrators`, `Standard Users`, `Auditors`) and mapped their respective realm roles.
+
+#### 3. Downstream OIDC Integration Model
+Downstream client applications (e.g., Grafana, Portainer, Gitea) authenticate users via OpenID Connect (OIDC). Upon successful authentication, Keycloak issues a signed JSON Web Token (JWT) containing the user's mapped group/role claims. The client application inspects these claims to dynamically enforce local application permissions.
+
+---
+
+### 🚀 Next Steps
+* [ ] Integrate **Grafana** via OIDC for central observability and log analysis.
+* [ ] Integrate **Portainer BE** for group-based container orchestration access control.
+* [ ] Configure automated backup policies for Keycloak's PostgreSQL database.
+
+```
