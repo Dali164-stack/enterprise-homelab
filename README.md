@@ -240,7 +240,6 @@ To adhere to the Principle of Least Privilege and maintain proper separation of 
 | **Administrators** | `homelab-admin` | Full administrative access across integrated homelab services. |
 | **Standard Users** | `homelab-user` | Regular authenticated user privileges and standard service access. |
 | **Auditors** | `homelab-readonly` | Read-only / view-only access across monitoring and auditing dashboards. |
-Here is the clean, full markdown section ready to be appended directly to your `README.md`:
 
 ```markdown
 ## 🔐 Identity & Access Management (IAM) — Keycloak Setup
@@ -309,3 +308,30 @@ Downstream client applications (e.g., Grafana, Portainer, Gitea) authenticate us
 * [ ] Configure automated backup policies for Keycloak's PostgreSQL database.
 
 ```
+# Homelab Infrastructure & OIDC Authentication
+
+This repository tracks the configuration and setup of my self-hosted homelab services, featuring centralized Single Sign-On (SSO) via Keycloak and reverse proxy routing via Nginx Proxy Manager.
+
+## 🏗️ Architecture & Containers
+
+All services run inside isolated Docker containers connected via a shared external Docker network (`nginx-proxy-manager_default`).
+
+* **Nginx Proxy Manager (`nginx-proxy-manager`)**: Acts as the reverse proxy managing local domains (`*.homelab.local`) and SSL certificates.
+* **Keycloak (`keycloak`)**: Identity Provider (IdP) handling OpenID Connect (OIDC) authentication.
+* **PostgreSQL (`keycloak-postgres`)**: Dedicated database backend for Keycloak.
+* **Grafana (`grafana`)**: Visualization and monitoring platform integrated with Keycloak OIDC.
+
+## 🔐 Authentication & OIDC Integration
+
+* **Realm**: `Homelab`
+* **Client ID**: `grafana`
+* **Role Mapping**: 
+  * `homelab-admin` $\rightarrow$ Grafana **Admin**
+  * `homelab-user` $\rightarrow$ Grafana **Editor**
+  * Default $\rightarrow$ **Viewer**
+* **Network Communication**: Grafana communicates with Keycloak internally over the Docker network (`http://keycloak:8080`) to bypass proxy loops during token exchange, while external user traffic flows securely through Nginx Proxy Manager.
+
+## 🚀 Next Steps
+* Integrate Prometheus for system metrics collection.
+* Add Loki for centralized container log aggregation.
+* Import pre-built monitoring dashboards.
