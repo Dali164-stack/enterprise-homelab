@@ -241,45 +241,8 @@ To adhere to the Principle of Least Privilege and maintain proper separation of 
 | **Standard Users** | `homelab-user` | Regular authenticated user privileges and standard service access. |
 | **Auditors** | `homelab-readonly` | Read-only / view-only access across monitoring and auditing dashboards. |
 
-```markdown
-## 🔐 Identity & Access Management (IAM) — Keycloak Setup
-
-### 📌 Overview
-This section documents the deployment and configuration of an enterprise-grade Identity and Access Management (IAM) infrastructure using **Keycloak 26** backed by **PostgreSQL 16**, hosted on an **Ubuntu Server** container environment behind **Nginx Proxy Manager (NPM)** with wildcard TLS/PKI certificates (`*.homelab.local`).
-
-The goal of this deployment is to establish a centralized Single Sign-On (SSO) authority enforcing **Role-Based Access Control (RBAC)** across all downstream self-hosted services and infrastructure management applications.
-
----
-
-### 🏗 Network & Proxy Architecture
-
-* **Host Node:** Ubuntu Server (`192.168.100.11`) running Docker Engine.
-* **External Network:** Dedicated bridge network (`homelab-net`) ensuring container isolation and inter-service routing.
-* **Reverse Proxy:** Nginx Proxy Manager terminating SSL (`https://auth.homelab.local`).
-* **Header Forwarding:** Keycloak configured with `KC_PROXY_HEADERS: "xforwarded"` to properly evaluate reverse proxy HTTP headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`) supplied by NPM, eliminating proxy loopback errors.
-
----
-
-### 🔐 Identity & RBAC Design
-
-To adhere to the Principle of Least Privilege and maintain proper separation of concerns:
-1. **Master Realm:** Reserved strictly for root-level identity provider administration.
-2. **Homelab Realm:** Isolated production realm created for homelab users, groups, and downstream client application SSO integrations.
-
-#### Role-Based Access Control (RBAC) Matrix
-
-| Group Name | Realm Role | Description / Access Scope |
-| :--- | :--- | :--- |
-| **Administrators** | `homelab-admin` | Full administrative access across integrated homelab services. |
-| **Standard Users** | `homelab-user` | Regular authenticated user privileges and standard service access. |
-| **Auditors** | `homelab-readonly` | Read-only / view-only access across monitoring and auditing dashboards. |
-
-
-```
 
 [ User Account ] ──> ( Group Membership ) ──> [ Realm Role ] ──> [ OIDC JWT Claim ] ──> ( App Enforces Local RBAC )
-
-```
 
 ---
 
@@ -302,13 +265,7 @@ Downstream client applications (e.g., Grafana, Portainer, Gitea) authenticate us
 
 ---
 
-### 🚀 Next Steps
-* [ ] Integrate **Grafana** via OIDC for central observability and log analysis.
-* [ ] Integrate **Portainer BE** for group-based container orchestration access control.
-* [ ] Configure automated backup policies for Keycloak's PostgreSQL database.
-
-```
-# Homelab Infrastructure & OIDC Authentication
+Homelab Infrastructure & OIDC Authentication
 
 This repository tracks the configuration and setup of my self-hosted homelab services, featuring centralized Single Sign-On (SSO) via Keycloak and reverse proxy routing via Nginx Proxy Manager.
 
