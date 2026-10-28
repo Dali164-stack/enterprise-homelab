@@ -303,3 +303,46 @@ To ensure proactive visibility into host health and container performance, a com
 * **Bypassing the Reverse Proxy:** Container-to-container communication (e.g., Grafana fetching data from Prometheus via `http://prometheus:9090`) occurs entirely on a private, shared Docker network (`nginx-proxy-manager_default`).
 * **Internal Docker DNS:** Docker automatically handles internal name resolution, routing traffic straight to target container IP addresses behind the scenes.
 * **Role of Nginx Proxy Manager (NPM):** NPM is strictly reserved for **external incoming front-door traffic** and SSL/TLS certificate termination for browsers accessing services via subdomains (e.g., `grafana.homelab.local`). Internal API polling and backend telemetry bypass NPM entirely.
+
+## Services Deployed
+
+### Portainer CE (Container Management)
+- **Status:** Active
+- **URL:** `https://portainer.homelab.local`
+- **Internal Port:** `9000` (HTTP) / `9443` (HTTPS)
+- **Compose Directory:** `/opt/portainer`
+- **Network:** `nginx-proxy-manager_default`
+- **Docker Compose Configuration:**
+  ```yaml
+  services:
+    portainer:
+      image: portainer/portainer-ce:latest
+      container_name: portainer
+      restart: always
+      command: ["--no-setup-token"]
+      ports:
+        - "9443:9443"
+        - "9000:9000"
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+        - portainer_data:/data
+      networks:
+        - nginx-proxy-manager_default
+
+  volumes:
+    portainer_data:
+
+  networks:
+    nginx-proxy-manager_default:
+      external: true
+  ```
+	  
+NPM Proxy Config:
+
+Scheme: http
+
+Forward Hostname: portainer
+
+Forward Port: 9000
+
+Notes: Configured with --no-setup-token to prevent setup window lockouts. Connected to external NPM Docker network for container-name routing.
