@@ -331,7 +331,18 @@ All services run inside isolated Docker containers connected via a shared extern
   * Default $\rightarrow$ **Viewer**
 * **Network Communication**: Grafana communicates with Keycloak internally over the Docker network (`http://keycloak:8080`) to bypass proxy loops during token exchange, while external user traffic flows securely through Nginx Proxy Manager.
 
-## 🚀 Next Steps
-* Integrate Prometheus for system metrics collection.
-* Add Loki for centralized container log aggregation.
-* Import pre-built monitoring dashboards.
+---
+
+## 📊 Observability & Metrics Stack (Prometheus & Grafana)
+
+To ensure proactive visibility into host health and container performance, a complete systems monitoring stack has been deployed.
+
+### 🏗️ Monitoring Architecture & Core Components
+* **Prometheus (`prometheus`):** Acts as the centralized time-series metrics engine. It periodically scrapes targets based on a defined configuration interval.
+* **Node Exporter (`node-exporter`):** A lightweight hardware metrics collector running natively on the host system, exposing system CPU, RAM, disk usage, and network statistics on port `9100`.
+* **Grafana (`grafana`):** The visualization presentation layer that ingests metrics from Prometheus and renders real-time performance dashboards (Node Exporter Full dashboard, ID `1860`).
+
+### 🌐 Internal Container Networking & DNS Resolution
+* **Bypassing the Reverse Proxy:** Container-to-container communication (e.g., Grafana fetching data from Prometheus via `http://prometheus:9090`) occurs entirely on a private, shared Docker network (`nginx-proxy-manager_default`).
+* **Internal Docker DNS:** Docker automatically handles internal name resolution, routing traffic straight to target container IP addresses behind the scenes.
+* **Role of Nginx Proxy Manager (NPM):** NPM is strictly reserved for **external incoming front-door traffic** and SSL/TLS certificate termination for browsers accessing services via subdomains (e.g., `grafana.homelab.local`). Internal API polling and backend telemetry bypass NPM entirely.
