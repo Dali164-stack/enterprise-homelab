@@ -346,3 +346,27 @@ Forward Hostname: portainer
 Forward Port: 9000
 
 Notes: Configured with --no-setup-token to prevent setup window lockouts. Connected to external NPM Docker network for container-name routing.
+
+
+## Portainer Administration Setup
+
+If you encounter a greyed-out initial setup button or missing setup tokens when deploying Portainer CE via Docker Compose, you can initialize the administrator account directly via the backend API:
+
+1. Start the Portainer container:
+   
+   ```
+   docker compose up -d portainer
+   ```
+   Retrieve the one-time setup token from the container logs:
+   ```
+   docker logs portainer
+   ```
+Initialize the admin user via the API using curl:
+
+```
+curl -X POST "http://localhost:9000/api/users/admin/init" \
+  -H "Content-Type: application/json" \
+  -H "X-Setup-Token: <YOUR_RETRIEVED_TOKEN_HERE>" \
+  -d '{"Username":"admin","Password":"HomelabAdmin123!"}'
+ ```
+
