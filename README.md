@@ -1,9 +1,65 @@
 # Enterprise Multi-VM Homelab Data Center
 
+## 📍 Table of Contents
+1. [Network Architecture & Topology](#1-network-architecture--topology)
+   - [Visual Infrastructure Architecture](#visual-infrastructure-architecture)
+   - [Network Segmentation Layout](#network-segmentation-layout)
+   - [IP Subnet Allocations](#ip-subnet-allocations)
+2. [Perimeter Edge Deployment: pfSense Firewall](#2-perimeter-edge-deployment-pfsense-firewall)
+   - [Core Interface Assignments & DHCP Scope Configuration](#core-interface-assignments--dhcp-scope-configuration)
+3. [Compute Infrastructure Node: Ubuntu Server](#3-compute-infrastructure-node-ubuntu-server)
+   - [3.1 Host Security Hardening & Production Rules Matrix](#31-host-security-hardening--production-rules-matrix)
+   - [3.2 Graphical Remote Management (XRDP Gateway)](#32-graphical-remote-management-xrdp-gateway)
+   - [3.3 Permanent Local Routing Engine Stabilization](#33-permanent-local-routing-engine-stabilization)
+   - [3.4 Production Docker Container Engine Deployment](#34-production-docker-container-engine-deployment)
+   - [3.5 Virtualized Application Layer Deployment (Nginx Workload)](#35-virtualized-application-layer-deployment-nginx-workload)
+   - [3.6 Enterprise Reverse Proxy Deployment (Nginx Proxy Manager)](#36-enterprise-reverse-proxy-deployment-nginx-proxy-manager)
+4. [Perimeter Edge Security Policies (pfSense Core Rules)](#4-perimeter-edge-security-policies-pfsense-core-rules)
+   - [4.1 Strict Management Plane Hardening (Port 80 De-provisioning)](#41-strict-management-plane-hardening-port-80-de-provisioning)
+   - [4.2 Internal Local DNS Resolver Integration (pfSense Host Overrides)](#42-internal-local-dns-resolver-integration-pfsense-host-overrides)
+5. [Current Implementation Status: Secure Edge Proxy & PKI](#5-current-implementation-status-secure-edge-proxy--pki)
+6. [Identity & Access Management (IAM) — Keycloak Setup](#-identity--access-management-iam--keycloak-setup)
+7. [Observability & Metrics Stack (Prometheus & Grafana)](#-observability--metrics-stack-prometheus--grafana)
+8. [Centralized Docker Logging Stack (Grafana, Loki, Promtail)](#-centralized-docker-logging-stack-grafana-loki-promtail)
+9. [Environment Configuration Reference (.env.example)](#-environment-configuration-reference-envexample)
+
+---
+
 ## 1. Network Architecture & Topology
 This repository documents the design, deployment, and management of an enterprise-grade virtualized infrastructure environment built inside **VMware Workstation Pro**. 
 
 The architecture simulates a secure corporate network perimeter utilizing a multi-NIC firewall topology to segregate internal corporate workloads from external public routing.
+
+### Visual Infrastructure Architecture
+
+```mermaid
+graph TD
+    subgraph External Network
+        WAN[WAN / Internet]
+    end
+
+    subgraph Hypervisor Transit - VMnet8
+        WAN -->|DHCP| pfWAN[pfSense WAN em0]
+    end
+
+    subgraph Internal Enterprise Perimeter - VMnet1 192.168.100.0/24
+        pfLAN[pfSense Gateway 192.168.100.1] -->|Static Gateway| Host[Ubuntu Server 192.168.100.11]
+        
+        subgraph Docker Microservices Network - nginx-proxy-manager_default
+            Host --> NPM[Nginx Proxy Manager :80 :443]
+            NPM -->|SSL Term / Proxy| Keycloak[Keycloak IAM :8080]
+            NPM -->|SSL Term / Proxy| Grafana[Grafana Dashboard :3000]
+            NPM -->|SSL Term / Proxy| Portainer[Portainer CE :9000]
+            
+            Keycloak -->|Database Link| Postgres[(Keycloak DB Postgres)]
+            Grafana -->|Telemetry Query| Prometheus[Prometheus Engine :9090]
+            Grafana -->|LogQL Query| Loki[Loki Log Aggregator :3100]
+            
+            NodeExp[Node Exporter :9100] -->|Scrapes Host Metrics| Prometheus
+            Promtail[Promtail Agent] -->|Tails /var/lib/docker/containers| Loki
+        end
+    end
+```
 
 ### Network Segmentation Layout
 * **WAN Interface (External Routing):** Configured via `VMnet8 (NAT)`. This allows the edge gateway to pull updates and route outbound traffic safely through the host network.
@@ -14,12 +70,12 @@ The architecture simulates a secure corporate network perimeter utilizing a mult
 | Network Interface | VMware Switch | IP Subnet Scope | Authorized DHCP Gateway |
 | :--- | :--- | :--- | :--- |
 | **WAN Interface** | VMnet8 (NAT) | Hypervisor Assigned | VMware Network Engine |
-| **LAN Internal**  | VMnet1 (Host-Only) | `192.168.100.0/24` | pfSense Firewall Appliance (Pending) |
+| **LAN Internal**  | VMnet1 (Host-Only) | `192.168.100.0/24` | pfSense Firewall Appliance |
 
 ---
 
 ## 2. Perimeter Edge Deployment: pfSense Firewall
-The perimeter security gateway has been successfully provisioned as a virtual appliance running on a **FreeBSD 14 x64** kernel kernel architecture. 
+The perimeter security gateway has been successfully provisioned as a virtual appliance running on a **FreeBSD 14 x64** kernel architecture. 
 
 ### Core Interface Assignments & DHCP Scope Configuration
 The network interface drivers have been statically mapped to align with hypervisor switches, and the internal local area network gateway variables have been initialized via the console interface:
@@ -28,7 +84,6 @@ The network interface drivers have been statically mapped to align with hypervis
 * **LAN Configuration:** Statically assigned to IP address **`192.168.100.1`** with a subnet mask allocation of **`/24`** (Class C network topology).
 * **DHCP Scope Engine:** Enabled on the internal LAN interface. The active IP allocation lease pool is strictly bound to the range of **`192.168.100.10` through `192.168.100.50`**, reserving lower and upper host registers for future static infrastructure nodes.
 
----
 ---
 
 ## 3. Compute Infrastructure Node: Ubuntu Server
@@ -43,13 +98,14 @@ The primary internal workload node has been successfully provisioned running a h
 The host relies on a single virtual network adapter mapped strictly to the isolated corporate LAN switch.
 
 * **Primary Interface:** `ens33`
-* **Network Assignment Engine:** DHCP via pfSense Firewall Appliance.
-* **Assigned IPv4 Address:** **`192.168.100.10`** with a subnet mask allocation of **`/24`**.
+* **Network Assignment Engine:** Static binding / DHCP via pfSense Firewall Appliance.
+* **Assigned IPv4 Address:** **`192.168.100.11`** with a subnet mask allocation of **`/24`**.
 * **Default Network Gateway:** `192.168.100.1` (pfSense LAN Interface).
 
 ### Baseline Network Verification Logs
 * **Internal Connectivity Test:** `ping -c 4 192.168.100.1` execution successful. **0% packet loss** verified. 
 * **Layer 2 Hypervisor Switching:** Confirmed operational on switch `VMnet1`.
+
 ### Edge Routing & DNS Troubleshooting Logs
 * **Diagnostic Incident:** Initial deployment showed successful external IP routing (`ping 8.8.8.8`), but full domain name resolution failed (`temporary failure in name resolution`).
 * **Root Cause Analysis:** The edge gateway (pfSense) lacked explicit upstream DNS server configurations in its core kernel routing engine, resulting in blocked or dropped DNS queries (Port 53 UDP/TCP) originating from the `VMnet1` segment.
@@ -58,6 +114,7 @@ The host relies on a single virtual network adapter mapped strictly to the isola
   2. Bypassed self-signed certificate warnings to access the pfSense web configuration interface at `https://192.168.100.1`.
   3. Committed Google (`8.8.8.8`) and Cloudflare (`1.1.1.1`) to **System > General Setup > DNS Server Settings** with DNS Override features active.
 * **Post-Remediation Verification:** Complete end-to-end outbound DNS resolution successfully restored. Command `ping -c 4 google.com` executed on `ubuntu-srv` yields **0% packet loss**.
+
 ### 3.1 Host Security Hardening & Production Rules Matrix
 To transition the compute workload from a troubleshooting state to a hardened production deployment, the local kernel-level defense parameters have been completely re-initialized:
 
@@ -71,13 +128,14 @@ To transition the compute workload from a troubleshooting state to a hardened pr
   22/tcp (v6)                ALLOW IN    Anywhere (IPv6)
   ```
 * **Credential Complexity Compliance:** Account `sysadmin` credentials have been migrated to a fully compliant corporate complexity string, satisfying internal dictionary check mechanisms (`pam_pwquality`).
-* **Management Persistence Status:** End-to-end verification confirms remote management access over Port 22 is stable, resilient across host restarts, and functioning at static anchor address `192.168.100.10`.
+* **Management Persistence Status:** End-to-end verification confirms remote management access over Port 22 is stable, resilient across host restarts, and functioning at static anchor address `192.168.100.11`.
+
 ### 3.2 Graphical Remote Management (XRDP Gateway)
 To provide administrative flexibility without relying on the hypervisor framework, a secure remote graphical pipeline has been established:
 
 * **Remote Display Engine:** XRDP Server (Xorg back-end architecture)
 * **Active Networking Port:** `3389/tcp` (Hardened via local UFW profile rules)
-* **Production Status:** Confirmed operational. Graphical desktop management sessions launch seamlessly via native Windows Remote Desktop Connection (`mstsc`) over static channel `192.168.100.10`.
+* **Production Status:** Confirmed operational. Graphical desktop management sessions launch seamlessly via native Windows Remote Desktop Connection (`mstsc`) over static channel `192.168.100.11`.
 * **Session Integrity Rules:** Validated that local VMware console sessions must remain logged out to prevent multi-session display rendering crashes.
 
 ### 3.3 Permanent Local Routing Engine Stabilization
@@ -151,16 +209,7 @@ To eliminate messy IP-and-port combinations (such as `192.168.100.11:8080`) and 
   * `443/tcp` (Public HTTPS Traffic)
   * `81/tcp` (Administrative Control Panel UI)
 
-### 4.2 Internal Local DNS Resolver Integration (pfSense Host Overrides)
-To translate human-readable enterprise domains to internal microservices without relying on public DNS infrastructure, the local network name resolution path was hardened:
-
-#### Configuration Workflow
-1. **pfSense DNS Resolver (Unbound):** Configured explicit **Host Overrides** mapping internal domain zones (`*.homelab.local`) directly to the Ubuntu server compute node (`192.168.100.11`).
-2. **Host-Only Bridge Routing:** Updated the Windows host `VMnet1` adapter configuration to enforce `192.168.100.1` as its primary Preferred DNS Server, establishing a stable local resolution loopback.
-
-#### Post-Remediation Verification Logs
-* **DNS Resolution Check:** Executing `nslookup nginx.homelab.local` successfully queries the pfSense nameserver (`pfsense.home.arpa` at `192.168.100.1`) and returns target address `192.168.100.11`.
-* **Application Layer Routing:** Navigating to `http://nginx.homelab.local` seamlessly proxies traffic through Nginx Proxy Manager down to the underlying backend test container, achieving clean domain translation.
+---
 
 ## 4. Perimeter Edge Security Policies (pfSense Core Rules)
 The edge firewall appliance utilizes strict stateful packet inspection. The following access control entries (ACE) have been deployed on the private LAN segment (`VMnet1`):
@@ -169,7 +218,7 @@ The edge firewall appliance utilizes strict stateful packet inspection. The foll
 
 | Order | Action | Source | Port | Destination | Protocol | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| 1 | **BLOCK** | `192.168.100.10` | * | Any | ICMP (Echo Req) | Block Ubuntu Outbound Ping Diagnostics |
+| 1 | **BLOCK** | `192.168.100.11` | * | Any | ICMP (Echo Req) | Block Ubuntu Outbound Ping Diagnostics |
 | 2 | **BLOCK** | Any | * | LAN Address | TCP (80) | Block unencrypted HTTP management Access |
 | 3 | **ALLOW** | LAN net | * | Any | Any | Default allow LAN to any rule |
 
@@ -198,6 +247,19 @@ To ensure browser HSTS and local caches did not obscure testing results, raw soc
 * **Compute Node Terminal Verification:** Executing `curl -Iv http://192.168.100.1` on `ubuntu-srv` fails to establish a 3-way handshake on port 80, terminating in a hard connection failure.
 * **Encrypted Access Validation:** Forcing a connection via `https://192.168.100.1` successfully builds a secure TLS session and exposes the webConfigurator dashboard.
 
+### 4.2 Internal Local DNS Resolver Integration (pfSense Host Overrides)
+To translate human-readable enterprise domains to internal microservices without relying on public DNS infrastructure, the local network name resolution path was hardened:
+
+#### Configuration Workflow
+1. **pfSense DNS Resolver (Unbound):** Configured explicit **Host Overrides** mapping internal domain zones (`*.homelab.local`) directly to the Ubuntu server compute node (`192.168.100.11`).
+2. **Host-Only Bridge Routing:** Updated the Windows host `VMnet1` adapter configuration to enforce `192.168.100.1` as its primary Preferred DNS Server, establishing a stable local resolution loopback.
+
+#### Post-Remediation Verification Logs
+* **DNS Resolution Check:** Executing `nslookup nginx.homelab.local` successfully queries the pfSense nameserver (`pfsense.home.arpa` at `192.168.100.1`) and returns target address `192.168.100.11`.
+* **Application Layer Routing:** Navigating to `http://nginx.homelab.local` seamlessly proxies traffic through Nginx Proxy Manager down to the underlying backend test container, achieving clean domain translation.
+
+---
+
 ## 5. Current Implementation Status: Secure Edge Proxy & PKI
 
 ### Architecture & Components
@@ -209,6 +271,8 @@ To ensure browser HSTS and local caches did not obscure testing results, raw soc
 * **Cross-Platform Cryptographic Parsing:** Resolved strict OpenSSL backend decoder errors (`ossl_store_handle_load_result`) by ensuring precise UTF-8 PEM file structuring and handling cross-platform file transfer routines between Windows administrative hosts and Linux Docker volumes.
 * **Edge Security:** Established secure HTTPS connections for local service discovery, avoiding insecure plaintext traffic within internal networks.
 
+---
+
 ## 🔐 Identity & Access Management (IAM) — Keycloak Setup
 
 ### 📌 Overview
@@ -216,19 +280,13 @@ This section documents the deployment and configuration of an enterprise-grade I
 
 The goal of this deployment is to establish a centralized Single Sign-On (SSO) authority enforcing **Role-Based Access Control (RBAC)** across all downstream self-hosted services and infrastructure management applications.
 
----
-
 ### 🏗 Network & Proxy Architecture
-
 * **Host Node:** Ubuntu Server (`192.168.100.11`) running Docker Engine.
-* **External Network:** Dedicated bridge network (`homelab-net`) ensuring container isolation and inter-service routing.
+* **External Network:** Dedicated bridge network (`nginx-proxy-manager_default`) ensuring container isolation and inter-service routing.
 * **Reverse Proxy:** Nginx Proxy Manager terminating SSL (`https://auth.homelab.local`).
 * **Header Forwarding:** Keycloak configured with `KC_PROXY_HEADERS: "xforwarded"` to properly evaluate reverse proxy HTTP headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`) supplied by NPM, eliminating proxy loopback errors.
 
----
-
 ### 🔐 Identity & RBAC Design
-
 To adhere to the Principle of Least Privilege and maintain proper separation of concerns:
 1. **Master Realm:** Reserved strictly for root-level identity provider administration.
 2. **Homelab Realm:** Isolated production realm created for homelab users, groups, and downstream client application SSO integrations.
@@ -241,52 +299,9 @@ To adhere to the Principle of Least Privilege and maintain proper separation of 
 | **Standard Users** | `homelab-user` | Regular authenticated user privileges and standard service access. |
 | **Auditors** | `homelab-readonly` | Read-only / view-only access across monitoring and auditing dashboards. |
 
-
+```text
 [ User Account ] ──> ( Group Membership ) ──> [ Realm Role ] ──> [ OIDC JWT Claim ] ──> ( App Enforces Local RBAC )
-
----
-
-### 🛠 Deployment & Configuration Steps
-
-#### 1. Keycloak Core Privileges & Realm Provisioning
-* Initialized system administrator (`sysadmin`) in the `master` realm.
-* Assigned global administrative scope (`admin` and `create-realm` realm roles) to allow self-managed realm creation and tenant configuration.
-* Provisioned the custom production realm: **`Homelab`**.
-
-#### 2. RBAC Construction
-* Created custom application-level realm roles:
-  * `homelab-admin`
-  * `homelab-user`
-  * `homelab-readonly`
-* Configured target user groups (`Administrators`, `Standard Users`, `Auditors`) and mapped their respective realm roles.
-
-#### 3. Downstream OIDC Integration Model
-Downstream client applications (e.g., Grafana, Portainer, Gitea) authenticate users via OpenID Connect (OIDC). Upon successful authentication, Keycloak issues a signed JSON Web Token (JWT) containing the user's mapped group/role claims. The client application inspects these claims to dynamically enforce local application permissions.
-
----
-
-Homelab Infrastructure & OIDC Authentication
-
-This repository tracks the configuration and setup of my self-hosted homelab services, featuring centralized Single Sign-On (SSO) via Keycloak and reverse proxy routing via Nginx Proxy Manager.
-
-## 🏗️ Architecture & Containers
-
-All services run inside isolated Docker containers connected via a shared external Docker network (`nginx-proxy-manager_default`).
-
-* **Nginx Proxy Manager (`nginx-proxy-manager`)**: Acts as the reverse proxy managing local domains (`*.homelab.local`) and SSL certificates.
-* **Keycloak (`keycloak`)**: Identity Provider (IdP) handling OpenID Connect (OIDC) authentication.
-* **PostgreSQL (`keycloak-postgres`)**: Dedicated database backend for Keycloak.
-* **Grafana (`grafana`)**: Visualization and monitoring platform integrated with Keycloak OIDC.
-
-## 🔐 Authentication & OIDC Integration
-
-* **Realm**: `Homelab`
-* **Client ID**: `grafana`
-* **Role Mapping**: 
-  * `homelab-admin` $\rightarrow$ Grafana **Admin**
-  * `homelab-user` $\rightarrow$ Grafana **Editor**
-  * Default $\rightarrow$ **Viewer**
-* **Network Communication**: Grafana communicates with Keycloak internally over the Docker network (`http://keycloak:8080`) to bypass proxy loops during token exchange, while external user traffic flows securely through Nginx Proxy Manager.
+```
 
 ---
 
@@ -303,72 +318,6 @@ To ensure proactive visibility into host health and container performance, a com
 * **Bypassing the Reverse Proxy:** Container-to-container communication (e.g., Grafana fetching data from Prometheus via `http://prometheus:9090`) occurs entirely on a private, shared Docker network (`nginx-proxy-manager_default`).
 * **Internal Docker DNS:** Docker automatically handles internal name resolution, routing traffic straight to target container IP addresses behind the scenes.
 * **Role of Nginx Proxy Manager (NPM):** NPM is strictly reserved for **external incoming front-door traffic** and SSL/TLS certificate termination for browsers accessing services via subdomains (e.g., `grafana.homelab.local`). Internal API polling and backend telemetry bypass NPM entirely.
-
-## Services Deployed
-
-### Portainer CE (Container Management)
-- **Status:** Active
-- **URL:** `https://portainer.homelab.local`
-- **Internal Port:** `9000` (HTTP) / `9443` (HTTPS)
-- **Compose Directory:** `/opt/portainer`
-- **Network:** `nginx-proxy-manager_default`
-- **Docker Compose Configuration:**
-  ```yaml
-  services:
-    portainer:
-      image: portainer/portainer-ce:latest
-      container_name: portainer
-      restart: always
-      command: ["--no-setup-token"]
-      ports:
-        - "9443:9443"
-        - "9000:9000"
-      volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-        - portainer_data:/data
-      networks:
-        - nginx-proxy-manager_default
-
-  volumes:
-    portainer_data:
-
-  networks:
-    nginx-proxy-manager_default:
-      external: true
-  ```
-	  
-NPM Proxy Config:
-
-Scheme: http
-
-Forward Hostname: portainer
-
-Forward Port: 9000
-
-Notes: Configured with --no-setup-token to prevent setup window lockouts. Connected to external NPM Docker network for container-name routing.
-
-
-## Portainer Administration Setup
-
-If you encounter a greyed-out initial setup button or missing setup tokens when deploying Portainer CE via Docker Compose, you can initialize the administrator account directly via the backend API:
-
-1. Start the Portainer container:
-   
-   ```
-   docker compose up -d portainer
-   ```
-   Retrieve the one-time setup token from the container logs:
-   ```
-   docker logs portainer
-   ```
-Initialize the admin user via the API using curl:
-
-```
-curl -X POST "http://localhost:9000/api/users/admin/init" \
-  -H "Content-Type: application/json" \
-  -H "X-Setup-Type: <YOUR_RETRIEVED_TOKEN_HERE>" \
-  -d '{"Username":"admin","Password":"HomelabAdmin123!"}'
-```
 
 ---
 
@@ -411,3 +360,39 @@ Log streams are queried directly inside Grafana Explore using the **Loki** data 
   ```logql
   {job="containerlogs"} |= "portainer"
   ```
+
+---
+
+## 📄 Environment Configuration Reference (.env.example)
+
+To maintain security hygiene, all secret keys, database credentials, and admin passwords must be managed using environment variables. Below is the reference template for `.env`:
+
+```bash
+# ==========================================
+# HOMELAB INFRASTRUCTURE ENVIRONMENT TEMPLATE
+# ==========================================
+
+# Network & Host Domain Boundaries
+DOMAIN_NAME=homelab.local
+HOST_IP=192.168.100.11
+
+# Keycloak IAM Configuration
+KEYCLOAK_ADMIN_USER=admin
+KEYCLOAK_ADMIN_PASSWORD=ChangeMeKeycloakAdmin123!
+KC_DB_USERNAME=keycloak
+KC_DB_PASSWORD=ChangeMePostgresKeycloak123!
+KC_DB_NAME=keycloak
+
+# PostgreSQL Backend Engine
+POSTGRES_USER=keycloak
+POSTGRES_PASSWORD=ChangeMePostgresKeycloak123!
+POSTGRES_DB=keycloak
+
+# Grafana Monitoring & Observability
+GF_SECURITY_ADMIN_USER=admin
+GF_SECURITY_ADMIN_PASSWORD=ChangeMeGrafanaAdmin123!
+
+# Loki & Promtail Log Aggregation
+LOKI_PORT=3100
+PROMTAIL_PORT=9080
+```
