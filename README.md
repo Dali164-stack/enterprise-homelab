@@ -142,24 +142,24 @@ To validate the end-to-end data plane integrity of the host-to-firewall network 
 * **Browser HSTS Mitigation:** Local browser history aggressively forced unencrypted HTTP traffic to rewrite as HTTPS, throwing connection drops. Forcing connection tracking via an **Incognito Session** successfully isolated the transport layers and exposed the true application payload.
 
 ### 3.6 Enterprise Reverse Proxy Deployment (Nginx Proxy Manager)
-To eliminate messy IP-and-port combinations (such as `192.168.100.11:8080`) and simulate real corporate application gateways, a containerized reverse proxy architecture has been deployed[cite: 1].
+To eliminate messy IP-and-port combinations (such as `192.168.100.11:8080`) and simulate real corporate application gateways, a containerized reverse proxy architecture has been deployed.
 
 #### Application Architecture & Port Allocations
-* **Container Orchestration:** Nginx Proxy Manager (NPM) deployed via Docker Compose on the Ubuntu Server (`192.168.100.11`)[cite: 1, 2].
+* **Container Orchestration:** Nginx Proxy Manager (NPM) deployed via Docker Compose on the Ubuntu Server (`192.168.100.11`).
 * **Active Listening Ports:** 
-  * `80/tcp` (Public HTTP Traffic)[cite: 2]
-  * `443/tcp` (Public HTTPS Traffic)[cite: 2]
-  * `81/tcp` (Administrative Control Panel UI)[cite: 2]
+  * `80/tcp` (Public HTTP Traffic)
+  * `443/tcp` (Public HTTPS Traffic)
+  * `81/tcp` (Administrative Control Panel UI)
 
 ### 4.2 Internal Local DNS Resolver Integration (pfSense Host Overrides)
 To translate human-readable enterprise domains to internal microservices without relying on public DNS infrastructure, the local network name resolution path was hardened:
 
 #### Configuration Workflow
-1. **pfSense DNS Resolver (Unbound):** Configured explicit **Host Overrides** mapping internal domain zones (`*.homelab.local`) directly to the Ubuntu server compute node (`192.168.100.11`)[cite: 1].
+1. **pfSense DNS Resolver (Unbound):** Configured explicit **Host Overrides** mapping internal domain zones (`*.homelab.local`) directly to the Ubuntu server compute node (`192.168.100.11`).
 2. **Host-Only Bridge Routing:** Updated the Windows host `VMnet1` adapter configuration to enforce `192.168.100.1` as its primary Preferred DNS Server, establishing a stable local resolution loopback.
 
 #### Post-Remediation Verification Logs
-* **DNS Resolution Check:** Executing `nslookup nginx.homelab.local` successfully queries the pfSense nameserver (`pfsense.home.arpa` at `192.168.100.1`) and returns target address `192.168.100.11`[cite: 5].
+* **DNS Resolution Check:** Executing `nslookup nginx.homelab.local` successfully queries the pfSense nameserver (`pfsense.home.arpa` at `192.168.100.1`) and returns target address `192.168.100.11`.
 * **Application Layer Routing:** Navigating to `http://nginx.homelab.local` seamlessly proxies traffic through Nginx Proxy Manager down to the underlying backend test container, achieving clean domain translation.
 
 ## 4. Perimeter Edge Security Policies (pfSense Core Rules)
@@ -366,7 +366,48 @@ Initialize the admin user via the API using curl:
 ```
 curl -X POST "http://localhost:9000/api/users/admin/init" \
   -H "Content-Type: application/json" \
-  -H "X-Setup-Token: <YOUR_RETRIEVED_TOKEN_HERE>" \
+  -H "X-Setup-Type: <YOUR_RETRIEVED_TOKEN_HERE>" \
   -d '{"Username":"admin","Password":"HomelabAdmin123!"}'
- ```
+```
 
+---
+
+## 🪵 Centralized Docker Logging Stack (Grafana, Loki, Promtail)
+
+### 📌 Overview & Architecture
+This section details the design, deployment, and troubleshooting of the unified log aggregation stack responsible for capturing, parsing, and visualizing logs across all Docker containers on the compute node.
+
+* **Stack Deployment Path:** `/opt/homelab/docker-compose.yml`
+* **Loki Configuration:** `/opt/homelab/loki/loki-config.yaml`
+* **Promtail Configuration:** `/opt/homelab/promtail/promtail-config.yaml`
+* **Network Topology:** Services communicate internally over the shared external network `nginx-proxy-manager_default`.
+
+### 🏗️ Ingestion Strategy
+Rather than relying on Docker service discovery hooks, Promtail mounts the host system's container log directory (`/var/lib/docker/containers/*/*.log`) directly in read-only mode. Promtail then processes log entries through a pipeline that extracts JSON fields, parses RFC3339Nano timestamps, and streams normalized data directly into Loki at `http://loki:3100`.
+
+### 🛠️ Incident Response & Troubleshooting Summary
+
+1. **Loki Volume Permissions Error**
+   * **Issue:** Storage permissions on the persistent `loki_data` directory prevented Loki from starting.
+   * **Fix:** Applied a temporary Alpine helper container to grant proper ownership/permissions (`chmod 777`) across the volume mount path.
+
+2. **Docker Compose Validation Errors**
+   * **Issue:** Deployment failed due to syntax errors including duplicate `command:` keys and typos in restart policies (`restart: nless-stopped`).
+   * **Fix:** Cleaned up indentation and corrected parameters to `restart: unless-stopped`.
+
+3. **Historical Timestamp Rejection (HTTP 400 Bad Request)**
+   * **Issue:** Promtail scraped old log files containing timestamps outside Loki's allowed historical ingestion window, returning `entry for stream ... has timestamp too old`.
+   * **Fix:** Updated `/opt/homelab/promtail/promtail-config.yaml` with `action_on_failure: skip` under the pipeline timestamp stage and cleared the position tracking cache (`positions.yaml`).
+
+### 🚀 Log Querying & Filtering via LogQL
+
+Log streams are queried directly inside Grafana Explore using the **Loki** data source:
+
+* **Query All Containers:**
+  ```logql
+  {job="containerlogs"}
+  ```
+* **Filter by Specific Container Name (e.g., Portainer):**
+  ```logql
+  {job="containerlogs"} |= "portainer"
+  ```
