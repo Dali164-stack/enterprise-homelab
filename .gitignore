@@ -1,4 +1,6 @@
 *.pem
 *.key
 *.crt
-Homelab Wildcard certificate and key/
+# Homelab Wildcard certificate and key
+*credentials*
+*.env
