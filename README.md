@@ -22,6 +22,7 @@
 7. [Observability & Metrics Stack (Prometheus & Grafana)](#-observability--metrics-stack-prometheus--grafana)
 8. [Centralized Docker Logging Stack (Grafana, Loki, Promtail)](#-centralized-docker-logging-stack-grafana-loki-promtail)
 9. [Environment Configuration Reference (.env.example)](#-environment-configuration-reference-envexample)
+10. [Infrastructure Monitoring & Real-Time Alerts (Uptime Kuma & Discord)](#-infrastructure-monitoring--real-time-alerts-uptime-kuma--discord)
 
 ---
 
@@ -395,6 +396,9 @@ GF_SECURITY_ADMIN_PASSWORD=ChangeMeGrafanaAdmin123!
 # Loki & Promtail Log Aggregation
 LOKI_PORT=3100
 PROMTAIL_PORT=9080
+
+# Uptime Kuma Monitoring Engine
+UPTIME_KUMA_PORT=3002
 ```
 
 ---
