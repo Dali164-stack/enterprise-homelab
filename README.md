@@ -396,3 +396,35 @@ GF_SECURITY_ADMIN_PASSWORD=ChangeMeGrafanaAdmin123!
 LOKI_PORT=3100
 PROMTAIL_PORT=9080
 ```
+
+---
+
+## 🔔 Infrastructure Monitoring & Real-Time Alerts (Uptime Kuma & Discord)
+
+### 📌 Overview & Architecture
+To ensure proactive reliability and immediate notification of service outages across the homelab infrastructure, **Uptime Kuma v2** has been deployed alongside an automated **Discord Webhook** alerting pipeline.
+
+* **Service Deployment:** Uptime Kuma v2 deployed via Docker Compose on `ubuntu-srv` (`192.168.100.11:3002`).
+* **Docker Socket Integration:** The host container engine mounts the local Docker socket (`/var/run/docker.sock`), allowing Uptime Kuma to query the Docker daemon API directly. This bypasses isolated bridge networks and SSL/loopback errors for both web-exposed services and internal background containers.
+* **Notification Channel:** Integrated with a dedicated Discord channel (`#homelab-alerts`) via a webhook connection for real-time rich embed alerts.
+
+### 🛠️ Configured Monitors & Monitoring Strategy
+
+1. **Portainer Container Monitor**
+   - **Monitor Type:** Docker Container (`Local Docker` host).
+   - **Target Container Name:** `portainer`
+   - **Purpose:** Tracks the live lifecycle state of the container process, alerting instantly if the management interface goes down.
+
+2. **Gitea Database Monitor (`gitea-db`)**
+   - **Monitor Type:** Docker Container (`Local Docker` host).
+   - **Target Container Name:** `gitea-db`
+   - **Purpose:** Monitors the internal background PostgreSQL container dedicated to Gitea without exposing raw database ports externally.
+
+3. **Keycloak Database Monitor (`keycloak-postgres`)**
+   - **Monitor Type:** Docker Container (`Local Docker` host).
+   - **Target Container Name:** `keycloak-postgres`
+   - **Purpose:** Tracks the health and availability of the Keycloak IAM backend database instance.
+
+### ⚙️ Engineering & Troubleshooting Highlights
+* **Socket vs. HTTP Endpoints:** Internal background containers (like databases) do not expose public web ports. Utilizing Uptime Kuma's Docker socket integration allows direct daemon state inspection (`running`, `stopped`, `restarting`) rather than relying on HTTP ping checks.
+* **Exact Container Naming Constraints:** Uptime Kuma queries the local Docker daemon using precise runtime names (matching `docker ps`). Generic search terms (e.g., `postgres`) trigger `404` errors if they do not match the exact container stack name (e.g., `gitea-db` or `keycloak-postgres`).

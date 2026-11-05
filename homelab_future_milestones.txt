@@ -1,0 +1,23 @@
+===================================================================
+             HOMELAB INFRASTRUCTURE NEXT STEPS & MILESTONES
+===================================================================
+
+1. AUTOMATED BACKUPS & DISASTER RECOVERY
+   - Set up scheduled backups for /opt/homelab/ configuration files.
+   - Implement volume snapshots for persistent data (Postgres, Grafana, Loki).
+   - Export and archive pfSense system configuration XML files.
+
+2. SERVICE UPTIME MONITORING & ALERTING
+   - Deploy Uptime Kuma via Docker Compose on the homelab network.
+   - Configure HTTPS endpoint monitoring for all *.homelab.local targets.
+   - Set up notification webhooks (Discord, Telegram, or Email).
+
+3. GRAFANA DASHBOARD CONSOLIDATION
+   - Create unified Grafana dashboards combining Prometheus metrics and Loki logs.
+   - Correlate host CPU/RAM spikes with real-time container log output.
+
+4. EXPAND SINGLE SIGN-ON (OIDC / KEYCLOAK)
+   - Integrate Portainer CE and downstream services into Keycloak OIDC.
+   - Enforce RBAC mappings (homelab-admin, homelab-user) across all endpoints.
+
+===================================================================
