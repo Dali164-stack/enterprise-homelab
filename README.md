@@ -17,6 +17,7 @@
 4. [Perimeter Edge Security Policies (pfSense Core Rules)](#4-perimeter-edge-security-policies-pfsense-core-rules)
    - [4.1 Strict Management Plane Hardening (Port 80 De-provisioning)](#41-strict-management-plane-hardening-port-80-de-provisioning)
    - [4.2 Internal Local DNS Resolver Integration (pfSense Host Overrides)](#42-internal-local-dns-resolver-integration-pfsense-host-overrides)
+   - [4.3 Cross-VLAN Segmentation & Default-Deny Verification](#43-cross-vlan-segmentation--default-deny-verification)
 5. [Current Implementation Status: Secure Edge Proxy & PKI](#5-current-implementation-status-secure-edge-proxy--pki)
 6. [Identity & Access Management (IAM) — Keycloak Setup](#-identity--access-management-iam--keycloak-setup)
 7. [Observability & Metrics Stack (Prometheus & Grafana)](#-observability--metrics-stack-prometheus--grafana)
@@ -72,6 +73,7 @@ graph TD
 | :--- | :--- | :--- | :--- |
 | **WAN Interface** | VMnet8 (NAT) | Hypervisor Assigned | VMware Network Engine |
 | **LAN Internal**  | VMnet1 (Host-Only) | `192.168.100.0/24` | pfSense Firewall Appliance |
+| **Workstations Segment** | VMnet1 (Host-Only) | `192.168.30.0/24` | pfSense Segment Gateway |
 
 ---
 
@@ -96,12 +98,10 @@ The primary internal workload node has been successfully provisioned running a h
 * **Access Method:** OpenSSH Server enabled via port `22` (Password Authentication active).
 
 ### Interface Mapping & Network Verification
-The host relies on a single virtual network adapter mapped strictly to the isolated corporate LAN switch.
+The host utilizes a multi-adapter configuration to separate server management from workstation testing simulation.
 
-* **Primary Interface:** `ens33`
-* **Network Assignment Engine:** Static binding / DHCP via pfSense Firewall Appliance.
-* **Assigned IPv4 Address:** **`192.168.100.11`** with a subnet mask allocation of **`/24`**.
-* **Default Network Gateway:** `192.168.100.1` (pfSense LAN Interface).
+* **Primary Interface (`ens33`):** Bound to static server IP **`192.168.100.11/24`** for core infrastructure management.
+* **Workstation Test Interface (`ens37`):** Bound to secondary custom adapter `VMnet1` and assigned static workstation IP **`192.168.30.50/24`** via Netplan to validate cross-VLAN isolation.
 
 ### Baseline Network Verification Logs
 * **Internal Connectivity Test:** `ping -c 4 192.168.100.1` execution successful. **0% packet loss** verified. 
@@ -152,17 +152,18 @@ NetworkManager configuration profiles handling dynamic DHCP allocations failed t
 ```yaml
 network:
   version: 2
-  renderer: NetworkManager
+  renderer: networkd
   ethernets:
     ens33:
       dhcp4: true
-      routes:
-        - to: default
-          via: 192.168.100.1
+    ens37:
+      dhcp4: false
+      addresses:
+        - 192.168.30.50/24
 ```
 
 #### Post-Remediation Verification Logs
-* **Reboot Persistence Test:** Triggered `sudo reboot`. Verified that the `default via 192.168.100.1 proto dhcp` channel instantiates automatically on cold initialization.
+* **Reboot Persistence Test:** Triggered `sudo reboot`. Verified that active interfaces instantiate automatically on cold initialization.
 * **Stateful Firewall Integrity Check:** Executing `curl -I https://google.com` yields immediate `HTTP/2 200` payloads, validating that local outbound routing remains online and synchronized with perimeter rulesets.
 
 ### 3.4 Production Docker Container Engine Deployment
@@ -258,6 +259,18 @@ To translate human-readable enterprise domains to internal microservices without
 #### Post-Remediation Verification Logs
 * **DNS Resolution Check:** Executing `nslookup nginx.homelab.local` successfully queries the pfSense nameserver (`pfsense.home.arpa` at `192.168.100.1`) and returns target address `192.168.100.11`.
 * **Application Layer Routing:** Navigating to `http://nginx.homelab.local` seamlessly proxies traffic through Nginx Proxy Manager down to the underlying backend test container, achieving clean domain translation.
+
+### 4.3 Cross-VLAN Segmentation & Default-Deny Verification
+To validate network boundary enforcement and default-deny firewall policies, a secondary network interface (`ens37`) was added to the compute node and bound statically to the `WORKSTATIONS` subnet (`192.168.30.50/24`).
+
+#### Verification Workflow & Commands
+* **Target Isolation Test:** Executed explicit source-bound ICMP pings targeting restricted subnets and gateways:
+  ```bash
+  ping -I 192.168.30.50 192.168.10.1
+  ping -I 192.168.30.50 192.168.20.1
+  ```
+* **Observed Result:** 100% packet loss / infinite terminal hang due to strict firewall interception.
+* **Firewall Log Confirmation:** Live validation under pfSense **Status > System Logs > Firewall** confirmed that ICMP packets originating from `192.168.30.50` were actively caught and dropped by the default-deny rule (`Rule ID: 10000005670`).
 
 ---
 
