@@ -445,3 +445,80 @@ To ensure proactive reliability and immediate notification of service outages ac
 ### ⚙️ Engineering & Troubleshooting Highlights
 * **Socket vs. HTTP Endpoints:** Internal background containers (like databases) do not expose public web ports. Utilizing Uptime Kuma's Docker socket integration allows direct daemon state inspection (`running`, `stopped`, `restarting`) rather than relying on HTTP ping checks.
 * **Exact Container Naming Constraints:** Uptime Kuma queries the local Docker daemon using precise runtime names (matching `docker ps`). Generic search terms (e.g., `postgres`) trigger `404` errors if they do not match the exact container stack name (e.g., `gitea-db` or `keycloak-postgres`).
+
+## Grafana OIDC Authentication via Keycloak
+
+Grafana is integrated with Keycloak using OpenID Connect (OIDC) behind Nginx Proxy Manager (NPM) for centralized single sign-on (SSO).
+
+### Architecture & Routing Logic
+Because services run inside isolated Docker networks behind a reverse proxy with local self-signed certificates, OAuth endpoints are split between public browser redirects and internal container-to-container communication:
+- **Browser Redirects (`AUTH_URL`):** Uses the public FQDN (`https://auth.homelab.local/...`) routed through Nginx Proxy Manager so the client browser can complete the login prompt[cite: 1, 10].
+- **Backend Token & API Exchange (`TOKEN_URL` / `API_URL`):** Uses internal Docker DNS (`http://keycloak:8080/...`) over the shared Docker bridge network to avoid external hairpin NAT timeouts and local SSL verification loops[cite: 1, 10].
+
+### Keycloak Configuration
+- **Realm:** `homelab`[cite: 10]
+- **Client ID:** `grafana`
+- **Client Authentication:** Enabled (`confidential` access type with generated Client Secret)[cite: 1]
+- **Valid Redirect URIs:** `https://grafana.homelab.local/login/generic_oauth`[cite: 1]
+- **Web Origins:** `https://grafana.homelab.local`[cite: 1]
+
+### Docker Compose Configuration (`/opt/homelab/docker-compose.yml`)
+Both `grafana` and `keycloak` must share the `homelab-net` external Docker bridge network for internal container name resolution (`keycloak:8080`).
+
+```yaml
+services:
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - homelab-net
+      - nginx-proxy-manager_default
+    restart: always
+    environment:
+      - GF_SERVER_ROOT_URL=[https://grafana.homelab.local](https://grafana.homelab.local)
+      - GF_SERVER_ENFORCE_DOMAIN=false
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_COOKIE_SECURE=true
+      - GF_AUTH_GENERIC_OAUTH_TLS_SKIP_VERIFY=true
+      - GF_AUTH_GENERIC_OAUTH_ENABLED=true
+      - GF_AUTH_GENERIC_OAUTH_NAME=Keycloak
+      - GF_AUTH_GENERIC_OAUTH_CLIENT_ID=grafana
+      - GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=<REDACTED_CLIENT_SECRET>
+      - GF_AUTH_GENERIC_OAUTH_SCOPES=openid profile email
+      - GF_AUTH_GENERIC_OAUTH_AUTH_URL=[https://auth.homelab.local/realms/homelab/protocol/openid-connect/auth](https://auth.homelab.local/realms/homelab/protocol/openid-connect/auth)
+      - GF_AUTH_GENERIC_OAUTH_TOKEN_URL=http://keycloak:8080/realms/homelab/protocol/openid-connect/token
+      - GF_AUTH_GENERIC_OAUTH_API_URL=http://keycloak:8080/realms/homelab/protocol/openid-connect/userinfo
+      - GF_AUTH_GENERIC_OAUTH_USE_REFRESH_TOKEN=true
+
+networks:
+  homelab-net:
+    external: true
+  nginx-proxy-manager_default:
+    external: true
+```	
+---
+
+---
+
+## 11. Troubleshooting Notes & Lessons Learned: Grafana OIDC Integration
+
+### 🛠️ Incident Response & Engineering Challenges
+
+1. **Split-Horizon Endpoint Routing (Token Exchange Timeout)**
+   - **Issue:** Initial login attempts resulted in `context deadline exceeded` errors during token exchange (`POST /realms/homelab/protocol/openid-connect/token`), and browser-vs-backend URL routing conflicts[cite: 1].
+   - **Root Cause:** Pointing backend token endpoints (`TOKEN_URL`) to the public FQDN (`https://auth.homelab.local/...`) forced the Grafana container to attempt hairpins through the host's reverse proxy or hit external loopback blocks[cite: 1].
+   - **Remediation:** Configured split-horizon endpoint routing: `AUTH_URL` remains pointed to the public FQDN for browser redirects, while `TOKEN_URL` and `API_URL` utilize direct internal container DNS (`http://keycloak:8080/...`) over the shared Docker network[cite: 1].
+
+2. **Docker Bridge Network Isolation & DNS Resolution Failures**
+   - **Issue:** Internal validation checks (`wget`) threw `bad address 'keycloak:8080'` or connection timeouts when trying to reach Keycloak via static IP (`172.17.0.2`) or container name[cite: 1].
+   - **Root Cause:** Containers on isolated user-defined networks cannot communicate natively with containers on separate bridges unless explicitly joined[cite: 1].
+   - **Remediation:** Explicitly attached both `grafana` and `keycloak` containers to the shared external Docker bridge network (`homelab-net`) and declared them within the compose file configuration[cite: 9].
+
+### 🔍 Diagnostic Validation Command
+Internal OIDC discovery and container connectivity between Grafana and Keycloak can be verified directly without opening a browser using:
+```bash
+sudo docker exec grafana wget -qO- --timeout=5 http://keycloak:8080/realms/homelab/.well-known/openid-configuration | head -n 5
+```
